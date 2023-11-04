@@ -304,16 +304,20 @@ func (ms *MelodySocket) Surrender(ctx context.Context, s *melody.Session, msg *d
 	})
 }
 
+// AskDraw 平局请求
+// 从消息中获取房间 ID（rid）和玩家是否同意平局请求的选项（consent）。
 func (ms *MelodySocket) AskDraw(ctx context.Context, s *melody.Session, msg *dto.Message) {
 	pid, _ := GetPId(s)
 	data := msg.Data.(map[string]interface{})
 	rid := data["rid"].(string)
 	consent := int(data["consent"].(float64))
+	// 调用 service.Draw() 方法处理平局请求，并将返回的对手 ID（opponentId）、房间对象（room）和错误（err）保存到相应的变量中。
 	opponentId, room, err := service.Draw(ctx, pid, rid, consent)
 	if err != nil {
 		SendErr(s, err)
 	}
 
+	// 如果玩家同意平局请求，则发送游戏结束消息（GameOverDTO），其中包含房间 ID（RId）和结束原因（Cause），并通过 Send2Room() 方法将房间对象发送给房间内的所有玩家。
 	if consent == 2 {
 		ms.SendGameOver(room, &dto.GameOverDTO{
 			RId:   rid,
@@ -324,6 +328,7 @@ func (ms *MelodySocket) AskDraw(ctx context.Context, s *melody.Session, msg *dto
 			Data: *room,
 		})
 	} else {
+		// 如果玩家拒绝平局请求，则通过 Send2PId() 方法将消息发送给对手玩家。
 		ms.Send2PId(opponentId, msg)
 	}
 }

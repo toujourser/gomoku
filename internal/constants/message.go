@@ -17,8 +17,8 @@ const (
 	SetPlayerStatus
 	SetReady
 	MakeStep
-	RetractStep
-	Surrender
-	AskDraw
+	RetractStep // 悔棋
+	Surrender   // 投降
+	AskDraw     // 求和
 	GameOver
 )

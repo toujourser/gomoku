@@ -89,6 +89,7 @@ func PrepareNewGame(room *entity.Room) {
 	room.Started = false
 }
 
+// CheckFive 检查是否五子连珠
 func CheckFive(room *entity.Room) (bool, *dto.GameOverDTO, error) {
 	hasFive, color := util.CheckFiveOfLastStep(&room.Steps)
 	if !hasFive {
@@ -96,6 +97,7 @@ func CheckFive(room *entity.Room) (bool, *dto.GameOverDTO, error) {
 	}
 
 	var gameOverDTO *dto.GameOverDTO
+	// 如果房主的颜色与连珠的颜色相同，则房主胜利， 反之挑战者胜利
 	if room.Host.Color == color {
 		gameOverDTO = &dto.GameOverDTO{
 			RId:    room.Id,
@@ -112,14 +114,17 @@ func CheckFive(room *entity.Room) (bool, *dto.GameOverDTO, error) {
 		}
 	}
 
+	// 准备新的游戏
 	PrepareNewGame(room)
 	return true, gameOverDTO, nil
 }
 
+// RetractStep 悔棋
 func RetractStep(ctx context.Context, pid string, rid string, consent int) (string, *entity.Room, int, error) {
 	lock.RoomLock.Lock(rid)
 	defer lock.RoomLock.Unlock(rid)
 
+	// 首先，获取房间对象。如果获取失败或者房间未开始或者没有任何棋步，则返回错误。
 	room, err := redis.GetRoom(ctx, rid)
 	if err != nil {
 		logger.Error(err)
@@ -132,6 +137,7 @@ func RetractStep(ctx context.Context, pid string, rid string, consent int) (stri
 		return "", nil, 0, err
 	}
 
+	// 判断当前玩家是否在房间内并且扮演的是参赛者角色。如果不是，则返回错误。
 	inRoom, role, _ := isInRoom(pid, room)
 	if !inRoom || role == "spectator" {
 		err = fmt.Errorf("error: player %v is not playing in room %v", pid, rid)
@@ -139,6 +145,7 @@ func RetractStep(ctx context.Context, pid string, rid string, consent int) (stri
 		return "", nil, 0, err
 	}
 
+	// 根据玩家角色确定对手 ID 和颜色。
 	var opponentId string
 	var color int8
 	if role == "host" {
@@ -148,7 +155,9 @@ func RetractStep(ctx context.Context, pid string, rid string, consent int) (stri
 		opponentId = room.Host.Id
 		color = room.Host.Color
 	}
-
+	// 如果同意悔棋并且满足一些条件（例如当前玩家不是白方或者当前棋步颜色与当前玩家颜色相同），
+	// 则将棋局步骤数组 room.Steps 中的最后一步或最后两步删除，
+	// 并设置返回值 count 为 1 或 2，表示悔棋了一步或两步。
 	var count int
 	if consent == 2 {
 		if length == 1 && color == constants.WHITE {
@@ -166,6 +175,7 @@ func RetractStep(ctx context.Context, pid string, rid string, consent int) (stri
 		}
 	}
 
+	// 更新房间对象并返回结果。
 	if err = redis.SetRoom(ctx, room); err != nil {
 		logger.Error(err)
 		return "", nil, 0, err
@@ -173,6 +183,7 @@ func RetractStep(ctx context.Context, pid string, rid string, consent int) (stri
 	return opponentId, room, count, err
 }
 
+// Surrender 投降
 func Surrender(ctx context.Context, pid string, rid string) (*dto.GameOverDTO, *entity.Room, error) {
 	lock.RoomLock.Lock(rid)
 	defer lock.RoomLock.Unlock(rid)
@@ -189,6 +200,7 @@ func Surrender(ctx context.Context, pid string, rid string) (*dto.GameOverDTO, *
 		return nil, nil, err
 	}
 
+	// 判断当前玩家是否在房间内并且扮演的是参赛者角色
 	inRoom, role, _ := isInRoom(pid, room)
 	if !inRoom || role == "spectator" {
 		err = fmt.Errorf("error: player %v is not playing in room %v", pid, rid)
@@ -201,6 +213,7 @@ func Surrender(ctx context.Context, pid string, rid string) (*dto.GameOverDTO, *
 		Cause: "surrender",
 	}
 
+	// 根据玩家角色确定胜利方和失败方，并创建一个 GameOverDTO 结构体对象，将房间 ID 和投降原因设置为相应的值。
 	if role == "host" {
 		gameOverDTO.Winner = room.Challenger
 		gameOverDTO.Loser = room.Host
@@ -209,6 +222,7 @@ func Surrender(ctx context.Context, pid string, rid string) (*dto.GameOverDTO, *
 		gameOverDTO.Loser = room.Challenger
 	}
 
+	// 准备新的游戏，即重置房间对象的状态和数据, 更新房间对象并返回 GameOverDTO 结构体指针和房间对象指针。
 	PrepareNewGame(room)
 	if err = redis.SetRoom(ctx, room); err != nil {
 		logger.Error(err)
@@ -218,6 +232,8 @@ func Surrender(ctx context.Context, pid string, rid string) (*dto.GameOverDTO, *
 	return gameOverDTO, room, nil
 }
 
+// Draw 请求平局的功能.
+// pid，玩家 ID；rid，房间 ID；consent，一个整数值表示玩家是否同意平局请求（1：拒绝；2：同意）
 func Draw(ctx context.Context, pid string, rid string, consent int) (string, *entity.Room, error) {
 	lock.RoomLock.Lock(rid)
 	defer lock.RoomLock.Unlock(rid)
@@ -240,6 +256,9 @@ func Draw(ctx context.Context, pid string, rid string, consent int) (string, *en
 		return "", nil, err
 	}
 
+	// 根据玩家是否同意平局请求，分别进行不同的操作。
+	// 若玩家同意，则准备新的游戏，即重置房间对象的状态和数据，并更新房间对象。
+	// 若玩家拒绝，则不进行任何操作。
 	if consent == 2 {
 		PrepareNewGame(room)
 		if err = redis.SetRoom(ctx, room); err != nil {
@@ -248,6 +267,7 @@ func Draw(ctx context.Context, pid string, rid string, consent int) (string, *en
 		}
 	}
 
+	// 返回对手 ID、房间对象指针和错误。
 	var opponentId string
 	if role == "host" {
 		opponentId = room.Challenger.Id
