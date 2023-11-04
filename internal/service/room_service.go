@@ -62,7 +62,7 @@ func EnterRoom(ctx context.Context, pid string, rid string, role string) (*entit
 	}
 
 	if inRoom, _, _ := isInRoom(pid, r); inRoom {
-		err = fmt.Errorf("error: %v already in room %v", pid, rid)
+		err = fmt.Errorf("你已经在该房间内了哦")
 		logger.Error(err)
 		return nil, err
 	}

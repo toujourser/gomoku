@@ -70,7 +70,7 @@ func (ms *MelodySocket) Receive(s *melody.Session, msgByte []byte) {
 
 func Send(s *melody.Session, msg *dto.Message) {
 	msgByte, _ := json.Marshal(msg)
-	logger.Debugf("send msg: %v", string(msgByte))
+	logger.Debugf("[send msg]: %v", string(msgByte))
 	if err := s.Write(msgByte); err != nil {
 		logger.Error(err)
 	}
@@ -160,7 +160,7 @@ func (ms *MelodySocket) SendGameOver(room *entity.Room, gameOverDTO *dto.GameOve
 }
 
 func (ms *MelodySocket) SendLeaveRoom(ctx context.Context, s *melody.Session, pid string, rid string) {
-	if !lock.RoomLock.IsExist(pid) {
+	if !lock.RoomLock.IsExist(rid) {
 		return
 	}
 	room, gameOverDTO, err := service.LeaveRoom(ctx, pid, rid)
